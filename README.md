@@ -1,7 +1,4 @@
-### This is A structured prompt framework for running comprehensive, evidence-based code quality audits using AI assistants with ### tool access (like Claude with computer use). It turns an LLM into a senior staff engineer conducting a data-driven audit 
-### calibrating to the project's own standards, gathering quantitative metrics (file size, git churn, test coverage, lint 
-### baselines), then focusing qualitative analysis on the highest-risk areas. Outputs a standardized report with prioritized 
-### findings, a "Gravity Wells" refactor priority table, and a false positive log to keep signal-to-noise high.
+### Here is a structured prompt framework for running comprehensive, evidence-based code quality audits using AI assistants with tool access (like Claude with computer use). It turns an LLM into a senior staff engineer conducting a data-driven audit calibrating to the project's own standards, gathering quantitative metrics (file size, git churn, test coverage, lint baselines), then focusing qualitative analysis on the highest-risk areas. Outputs a standardized report with prioritized findings, a "Gravity Wells" refactor priority table, and a false positive log to keep signal-to-noise high. ###
  
  ---                                                                              
   Codebase Health & Integrity Audit
