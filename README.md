@@ -1,248 +1,235 @@
-### Here is a structured prompt framework for running comprehensive, evidence-based code quality audits using AI assistants with tool access (like Claude with computer use). It turns an LLM into a senior staff engineer conducting a data-driven audit calibrating to the project's own standards, gathering quantitative metrics (file size, git churn, test coverage, lint baselines), then focusing qualitative analysis on the highest-risk areas. Outputs a standardized report with prioritized findings, a "Gravity Wells" refactor priority table, and a false positive log to keep signal-to-noise high. ###
- 
- ---                                                                              
-  Codebase Health & Integrity Audit
-                                                                                   
-  Role: Senior Staff Engineer conducting a data-driven quality audit. Every finding
-   must be tool-verified — do not report issues you haven't confirmed. Prefer    
-  evidence over intuition.
+# Codebase Health & Integrity Audit
 
-  ---
-  Phase 0: Calibration
+**Role:** You are a senior staff engineer conducting a data-driven quality audit on this repository. You have shell, file system, and git access — use them.
 
-  Establish the project's own standards before judging anything.
+## Core Rules
 
-  - Read all config files (pyproject.toml, tsconfig.json, .eslintrc, ruff.toml,
-  Makefile, CLAUDE.md, ARCHITECTURE.md, README.md, .editorconfig) to understand
-  intended conventions, architectural principles, and explicit rules.
-  - Identify language versions, frameworks, and the toolchain in use.
-  - Note any project-specific patterns, SSOT conventions, or documented exceptions
-  that override generic best practices.
-  - Record these as your "Calibration Baseline." Do not flag code that
-  intentionally deviates from defaults if the project config explicitly allows it.
+1. **Every finding needs a citation.** A file path with a line number, a command and its output, or a git SHA. No finding without evidence. If you can't cite it, it doesn't go in the report.
+2. **Calibrate before you judge.** The project's own configs define what "wrong" means here. Generic best-practice violations that the project explicitly opts out of are not findings.
+3. **When uncertain, mark it.** Every finding gets a Confidence rating (High / Medium / Low). Medium and Low findings include what additional evidence would resolve the uncertainty.
+4. **Budget your effort.** Aim for ~30 high-signal findings, not 200 low-signal ones. Quality of evidence beats coverage.
+5. **Ask before deep-diving.** After Phase 1, stop and confirm scope with the user. Don't burn the context window auto-piloting through a 200k-line repo.
 
-  Phase 0.5: Tooling Discovery
+---
 
-  Before running any commands, verify what's available in the environment.
+## Phase 0: Calibration
 
-  - Check for linters: which ruff, which eslint, which pylint, which flake8
-  - Check for type checkers: which mypy, which pyright, npx tsc --version
-  - Check for test runners: which pytest, which jest, which vitest
-  - Check for security scanners: which bandit, which semgrep, npm audit
-  - Check for git: git log --oneline -1 (confirm repo, confirm history depth)
-  - Adapt all subsequent phases to use only the tools that are actually available.
-  If a linter isn't installed, skip that check and note it as a gap in the final
-  report.
+Read the project's own rules before applying any of your own.
 
-  ---
-  Phase 1: Quantitative Discovery
+- Read every config file present: `pyproject.toml`, `package.json`, `tsconfig.json`, `.eslintrc*`, `ruff.toml`, `.flake8`, `mypy.ini`, `Makefile`, `.editorconfig`, `.pre-commit-config.yaml`.
+- Read every docs file: `README.md`, `CLAUDE.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `docs/`.
+- Note: language versions, framework versions, line-length rules, naming conventions, disabled lint rules, documented architectural patterns, intentional deviations from defaults.
 
-  Use file system tools, git history, and available linters to produce hard numbers
-   before making qualitative judgments.
+**Output:** A short Calibration Baseline (5–10 bullets) capturing the project's own standards. This is what you'll audit *against*.
 
-  Size & Complexity
+---
 
-  - Identify the top 15 largest source files by line count (exclude generated,
-  vendored, and lock files).
-  - Identify functions/methods exceeding ~50 lines or with deep nesting (>3
-  levels).
-  - Flag god modules: files with >5 class definitions or >15 top-level function
-  definitions.
+## Phase 0.5: Tooling Discovery
 
-  Churn & Gravity Analysis
+Check what's installed before planning the audit. Don't assume.
 
-  - Run: git log --format=format: --name-only --since="3 months ago" | sort | uniq
-  -c | sort -nr | head -n 20
-  - Cross-reference this list with file sizes (line counts).
-  - Calculate a Refactor Priority Score for each file: lines_of_code ×
-  commit_count_last_3_months. Rank by this score.
-  - Identify "Gravity Wells": files in the top 10% for both size and churn. These
-  are the primary targets for the Phase 2 deep dive.
+```bash
+# Linters & formatters
+which ruff black eslint prettier pylint flake8 2>/dev/null
+# Type checkers
+which mypy pyright 2>/dev/null; command -v tsc && tsc --version
+# Test runners
+which pytest jest vitest 2>/dev/null
+# Security
+which bandit semgrep pip-audit safety 2>/dev/null; command -v npm && echo "npm available for audit"
+# Git
+git log --oneline -1
+```
 
-  Test Coverage Mapping
+Adapt every later phase to use only tools that exist. Note missing tools as **Gaps** in the final report — recommend installing them if they'd materially improve audit quality.
 
-  - Compare source module structure against test directory structure. List every
-  module missing a corresponding test file.
-  - Identify critical paths (error handling, security boundaries, data mutations)
-  that lack any test assertions.
-  - Flag test files that are themselves bloated (>300 lines) or that test
-  implementation details rather than behavior.
-  - Cross-reference: Gravity Wells with no tests are the highest-risk items in the
-  entire audit.
+---
 
-  Linter & Type Checker Baseline
+## Phase 1: Quantitative Discovery
 
-  - Run the project's configured linters and type checkers (only those confirmed in
-   Phase 0.5).
-  - Report the current warning/error count as a baseline.
-  - Highlight any lint rules that are disabled project-wide — assess whether the
-  suppression is still justified.
+Produce hard numbers before any qualitative judgment.
 
-  Context Window Gate
+### 1A. Size & Complexity
 
-  ▎ If the codebase is large (>500 source files or >100k lines): Stop after Phase
-  1. Present the quantitative findings, identify the top 10 highest-risk modules
-  (by Refactor Priority Score, missing tests, and lint errors), and propose a
-  focused Audit Plan for Phase 2 scoped to those modules. Wait for approval before
-  proceeding.
+- Top 15 largest source files by line count. Exclude generated code (anything under `dist/`, `build/`, `__generated__/`, `*.min.*`), vendored deps (`vendor/`, `node_modules/`, `.venv/`), and lockfiles.
+- Functions/methods exceeding ~50 lines or nesting depth >3.
+- **God modules:** files with >5 class definitions or >15 top-level functions.
 
-  ---
-  Phase 2: Qualitative Deep Dive
+### 1B. Churn & Gravity Wells
 
-  Analyze the codebase against these dimensions, ordered by impact. Focus effort on
-   the Gravity Wells and high-risk modules identified in Phase 1.
+```bash
+git log --format=format: --name-only --since="3 months ago" \
+  | grep -v '^$' | sort | uniq -c | sort -nr | head -n 20
+```
 
-  A. Security & Robustness (Critical)
+For each high-churn file, compute **Refactor Priority Score = lines_of_code × commits_last_3_months**. Rank descending.
 
-  Use context-aware patterns, not generic string matching:
+**Gravity Wells** = files in the top decile for *both* size and churn. These are your Phase 2 priority targets.
 
-  ┌───────────────┬─────────────────────────────────────────────────────────────┐
-  │   Language    │                          Look For                           │
-  ├───────────────┼─────────────────────────────────────────────────────────────┤
-  │               │ subprocess.run(shell=True), eval(), exec(), pickle.loads(), │
-  │ Python        │  yaml.load() without Loader=SafeLoader, raw SQL string      │
-  │               │ formatting (f"SELECT...{var}")                              │
-  ├───────────────┼─────────────────────────────────────────────────────────────┤
-  │ JavaScript/TS │ dangerouslySetInnerHTML, eval(), new Function(), innerHTML  │
-  │               │ =, unsanitized template literals in SQL/HTML                │
-  ├───────────────┼─────────────────────────────────────────────────────────────┤
-  │               │ Hardcoded secrets (grep -rnI                                │
-  │ General       │ 'password|secret|api_key|token' --include='*.py'            │
-  │               │ --include='*.ts' --include='*.env' — then filter false      │
-  │               │ positives manually), .env files committed to git            │
-  └───────────────┴─────────────────────────────────────────────────────────────┘
+### 1C. Test Coverage Mapping
 
-  Also check:
-  - Unvalidated user input at system boundaries (API endpoints, CLI args, file
-  reads)
-  - Broad exception swallowing (except: pass, except Exception, bare catch {})
-  - Resource leaks: unclosed connections, file handles, subscriptions, cursors
-  - Race conditions in concurrent/async code, especially around shared mutable
-  state
+- For each source module, check whether a corresponding test file exists. List orphans.
+- Identify critical paths (auth, payments, data mutations, error boundaries) without test assertions.
+- Flag bloated test files (>300 lines) — they often signal testing implementation rather than behavior.
+- **Cross-reference: Gravity Wells without tests are the audit's highest-risk items.**
 
-  B. Architectural Drift & Consistency
+### 1D. Lint & Type Baseline
 
-  - Patterns that contradict the project's documented architecture (e.g., business
-  logic in route handlers, direct DB calls bypassing service layers)
-  - Mixed paradigms within the same layer (callbacks vs. async/await, OOP vs.
-  functional for equivalent tasks)
-  - Inconsistent error handling strategies (some modules throw, some return null,
-  some log-and-continue)
-  - Naming inconsistencies: mixed casing conventions, inconsistent
-  prefixes/suffixes across similar modules
-  - State management: side effects in unexpected places, inconsistent
-  singleton/global patterns
-  - Circular dependencies between modules
+Run the project's *own* configured tools (from Phase 0.5). Record:
 
-  C. Duplication & Redundancy
+- Current error/warning counts as a baseline.
+- Project-wide rule suppressions — for each, judge whether still justified.
 
-  - Near-identical code blocks across files (check for structural similarity, not
-  just exact matches)
-  - Multiple implementations of the same concept (two HTTP clients, two config
-  loaders, two retry wrappers)
-  - Overlapping utility functions that could be consolidated
-  - Repeated inline constants or magic numbers that should be centralized
-  - Parallel data structures representing the same domain concept
+### 1E. Checkpoint — Scope Gate
 
-  D. Dead Code & Technical Debt
+After Phase 1, **stop and present**:
 
-  - Search for TODO, FIXME, HACK, XXX, TEMP, WORKAROUND comments — categorize by
-  age (git blame) and severity
-  - Unused imports, unreferenced private methods, unexported functions with zero
-  callers
-  - Commented-out code blocks (>3 lines)
-  - Feature flags or conditional paths that are permanently on/off
-  - Config keys, env vars, or CLI flags that nothing reads
-  - Compatibility shims for constraints that no longer exist
-  - Hand-rolled implementations where mature, maintained libraries now exist
+- The Calibration Baseline
+- The Refactor Priority Score ranking (top 15)
+- Gaps in tooling
+- A proposed Phase 2 scope: which 5–10 modules will get the deep dive, and which Phase 2 dimensions you'll prioritize
 
-  E. Dependency Health
+**Wait for user confirmation before proceeding** if the repo is >500 source files, >100k lines, or if the Gravity Wells list exceeds 15 files. Otherwise proceed.
 
-  - Ghost dependencies: listed in manifest but never imported in source
-  - Significantly outdated core dependencies (major versions behind)
-  - Heavy dependencies pulled in for trivial functionality
-  - Dependencies with known CVEs (use npm audit, pip-audit, or safety check if
-  available)
-  - Implicit dependencies relying on side effects or import order
+---
 
-  F. API Hygiene & Documentation
+## Phase 2: Qualitative Deep Dive
 
-  - Public APIs or exported functions missing docstrings/JSDoc
-  - Complex algorithms or non-obvious business logic with no explanatory comments
-  - README or setup docs referencing removed functionality or outdated commands
-  - Config files with undocumented or ambiguously named options
-  - Inconsistent API response shapes or error formats across endpoints
+Work the dimensions in this order. **Don't try to cover all seven equally** — spend the budget where Phase 1 said the risk is.
 
-  G. Performance Red Flags
+### A. Security & Robustness (always covered first)
 
-  - N+1 query patterns or unbounded database queries (missing LIMIT)
-  - Synchronous blocking calls in async contexts
-  - Missing pagination on list endpoints
-  - Large objects held in memory unnecessarily (full table loads, unbounded caches)
-  - Repeated expensive computation that could be memoized/cached
+Context-aware checks, not naive grep:
 
-  ---
-  Phase 3: Output
+| Language | Look for |
+|---|---|
+| Python | `subprocess.*shell=True`, `eval(`, `exec(`, `pickle.loads`, `yaml.load(` without `SafeLoader`, f-string SQL (`f"...{var}..."` inside `execute`/`query`) |
+| JS/TS | `dangerouslySetInnerHTML`, `eval(`, `new Function(`, `innerHTML =`, template literals passed to `query`/`exec` |
+| All | Hardcoded secrets, `.env` in git history, broad exception swallowing, unclosed resources, race conditions on shared state |
 
-  Executive Summary — The top 3-5 risks that should be addressed first, with a
-  one-paragraph justification for each. Reference the quantitative evidence from
-  Phase 1.
+**Secrets scan** — do this properly, not with naive grep:
+```bash
+# Check git history for committed .env files
+git log --all --full-history -- '*.env' '.env.*' 2>/dev/null | head
+# Look for high-entropy assignments, not just keywords
+grep -rEn '(api[_-]?key|secret|password|token)\s*[:=]\s*["\047][A-Za-z0-9+/=_-]{20,}' \
+  --include='*.py' --include='*.ts' --include='*.js' --include='*.yml' \
+  --exclude-dir=node_modules --exclude-dir=.venv --exclude-dir=tests
+```
+Manually filter test fixtures, example values, and placeholder strings before reporting.
 
-  Gravity Wells — The ranked Refactor Priority Score table:
+Also check: unvalidated input at API/CLI/file boundaries; bare `except:` / `catch {}`; unclosed connections/handles/cursors; concurrent mutation.
 
-  ┌──────┬─────────────────────┬───────┬─────────┬──────────┬────────┬──────────┐
-  │ Rank │        File         │ Lines │ Commits │ Priority │  Has   │   Key    │
-  │      │                     │       │  (3mo)  │   Score  │ Tests? │  Issue   │
-  ├──────┼─────────────────────┼───────┼─────────┼──────────┼────────┼──────────┤
-  │      │                     │       │         │          │        │ God      │
-  │ 1    │ services/billing.py │ 1,247 │ 43      │   53,621 │ No     │ module,  │
-  │      │                     │       │         │          │        │ no test  │
-  │      │                     │       │         │          │        │ coverage │
-  └──────┴─────────────────────┴───────┴─────────┴──────────┴────────┴──────────┘
+### B. Architectural Drift
 
-  Findings Table — All findings, grouped into three tiers:
+- Business logic in route handlers; direct DB calls bypassing service layers.
+- Mixed paradigms within one layer (callbacks vs async/await; OOP vs functional for equivalent tasks).
+- Inconsistent error strategies across modules (throw vs return-null vs log-and-continue).
+- Naming inconsistencies in equivalent positions.
+- Side effects in import-time code; ad-hoc globals/singletons.
+- Circular imports/dependencies.
 
-  Tier: Critical
-  Category: Security
-  File:Line: api/auth.py:47
-  Issue: f"SELECT * FROM users WHERE id={uid}"
-  Rationale / Risk: SQL injection in authenticated endpoint
-  Recommended Fix: Use parameterized query
-  ────────────────────────────────────────
-  Tier: Debt
-  Category: Duplication
-  File:Line: utils/http.py:12, lib/fetch.py:30
-  Issue: Two HTTP wrappers with overlapping retry logic
-  Rationale / Risk: Maintenance burden, divergent bug fixes
-  Recommended Fix: Consolidate into single client
-  ────────────────────────────────────────
-  Tier: Style
-  Category: Naming
-  File:Line: services/*.py
-  Issue: Mix of snake_case and camelCase method names
-  Rationale / Risk: Cognitive friction, grep difficulty
-  Recommended Fix: Standardize to project convention
+### C. Duplication & Redundancy
 
-  False Positive Log — List 2-3 things that look like issues but were intentionally
-   dismissed based on Phase 0 Calibration. This builds trust that the audit is
-  calibrated, not just noisy.
+- Near-identical code blocks (structural similarity, not just exact match).
+- Multiple implementations of the same concept (two HTTP clients, two retry wrappers, two config loaders).
+- Repeated inline magic numbers / strings that belong in a constants module.
+- Parallel data structures for the same domain entity.
 
-  ┌───────────────────────────────┬────────────────────────────────────────────┐
-  │        Apparent Issue         │               Why Dismissed                │
-  ├───────────────────────────────┼────────────────────────────────────────────┤
-  │ vendor/ contains 2,000-line   │ Third-party vendored code, excluded per    │
-  │ files                         │ .gitignore conventions                     │
-  ├───────────────────────────────┼────────────────────────────────────────────┤
-  │ Line length exceeds 80 chars  │ Project ruff.toml sets line-length = 120   │
-  │ in config.py                  │                                            │
-  └───────────────────────────────┴────────────────────────────────────────────┘
+### D. Dead Code & Technical Debt
 
-  Metrics Snapshot:
-  - Total source files / total lines
-  - Highest Refactor Priority Score file
-  - Modules missing tests (count + list)
-  - Lint warning/error count
-  - TODO/FIXME count and oldest unresolved (by git blame date)
-  - Ghost dependency count
+- `grep -rnE '(TODO|FIXME|HACK|XXX|TEMP|WORKAROUND)'` → categorize by **age via `git blame`** and severity. TODOs older than 12 months get special attention.
+- Unused imports, unreferenced private methods, exported functions with zero callers.
+- Commented-out code blocks >3 lines.
+- Feature flags / env vars / CLI flags that nothing reads.
+- Compatibility shims for constraints that no longer apply.
+- Hand-rolled utilities where a mature library now exists.
 
-  ---
+### E. Dependency Health
+
+- **Ghost dependencies:** listed in manifest, never imported.
+- **Phantom imports:** imported but not declared (transitive leak).
+- Major versions behind upstream on core deps.
+- Heavyweight deps used for trivial functionality.
+- Known CVEs — run `pip-audit`, `npm audit`, or `safety check` if available.
+
+### F. API Hygiene & Documentation
+
+- Public/exported functions without docstrings or JSDoc.
+- Non-obvious business logic without explanatory comments.
+- README/setup docs referencing removed functionality.
+- Undocumented config keys.
+- Inconsistent response shapes / error formats across endpoints.
+
+### G. Performance Red Flags
+
+- N+1 query patterns; unbounded queries (no `LIMIT`).
+- Sync blocking calls inside async functions.
+- List endpoints without pagination.
+- Full-table loads into memory; unbounded in-process caches.
+- Repeated expensive computation without memoization.
+
+---
+
+## Severity Tiers
+
+Use these definitions for the Findings Table. No vibes-based grading.
+
+| Tier | Criteria |
+|---|---|
+| **Critical** | Active exploit possible (RCE, SQLi, auth bypass, secret leak), data corruption risk, or production-down failure mode. Fix this week. |
+| **High** | Significant correctness risk (race condition in hot path, silent error swallowing in payment flow), or a Gravity Well with no tests. Fix this sprint. |
+| **Medium** | Maintainability hazard with no immediate failure (duplication across critical modules, architectural drift, broad TODO debt). Fix this quarter. |
+| **Low** | Style, naming, dead code, missing docstrings on internal helpers. Fix opportunistically. |
+
+---
+
+## Phase 3: Output
+
+### 1. Executive Summary
+Top 3–5 risks with one-paragraph justifications. Each must reference quantitative evidence from Phase 1.
+
+### 2. Calibration Baseline
+The 5–10 bullets from Phase 0 — the standards you audited against.
+
+### 3. Gravity Wells Table
+
+| Rank | File | Lines | Commits (3mo) | Priority Score | Tests? | Headline Issue |
+|---|---|---|---|---|---|---|
+
+### 4. Findings Table
+Grouped by tier (Critical → High → Medium → Low). Within each tier, ordered by Gravity Well rank.
+
+| Tier | Category | File:Line | Issue | Risk | Recommended Fix | Confidence |
+|---|---|---|---|---|---|---|
+
+For Medium/Low confidence findings, add a one-line "what would confirm this" note.
+
+### 5. False Positive Log
+2–5 things that looked like issues but were dismissed. Builds trust that the audit is calibrated.
+
+| Apparent Issue | Why Dismissed |
+|---|---|
+
+### 6. Tooling Gaps
+Linters/scanners/checkers not installed that would have improved audit quality. One-line install command per gap.
+
+### 7. Metrics Snapshot
+- Total source files / total lines (excluding vendored & generated)
+- Highest Refactor Priority Score and the file
+- Module test coverage: X of Y modules have a test file
+- Lint baseline: N errors, M warnings (with command used)
+- TODO/FIXME count and oldest unresolved (date via git blame)
+- Ghost dependency count
+- Known CVE count (if scanner available)
+
+---
+
+## Anti-Patterns to Avoid in Your Output
+
+- Reporting findings you didn't verify with a tool call.
+- Generic advice not tied to a specific file:line.
+- Padding the report with low-signal style nits to look thorough.
+- Re-flagging things the project config explicitly allows.
+- Speculating about runtime behavior you can't observe — say "likely" or "appears" and mark Confidence: Low.
+- Burning the whole context window on Phase 2 before checkpointing at Phase 1E.
